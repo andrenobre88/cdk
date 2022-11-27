@@ -12,7 +12,6 @@ from constructs import Construct
 
 
 class Infra(Stack):
-
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
@@ -32,7 +31,7 @@ class Infra(Stack):
 app = cdk.App()
 
 Infra(app,
-      "InfraStack",
+      "api-v1",
       env=cdk.Environment(
           account=os.getenv('CDK_DEFAULT_ACCOUNT'),
           region=os.getenv('CDK_DEFAULT_REGION')
