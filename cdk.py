@@ -16,13 +16,13 @@ class Infra(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # Lambda A
-        with open("lambda_a/lambda_handler.py", encoding="utf8") as fp:
+        with open("lambda_a/app.py", encoding="utf8") as fp:
             handler_code = fp.read()
 
         lambda_a = lambda_.Function(
             self, "Singleton",
             code=lambda_.InlineCode(handler_code),
-            handler="index.main",
+            handler="app.lambda_handler",
             timeout=Duration.seconds(10),
             runtime=lambda_.Runtime.PYTHON_3_8,
         )
@@ -31,7 +31,7 @@ class Infra(Stack):
 app = cdk.App()
 
 Infra(app,
-      "api-v1",
+      "api-etl-v1",
       env=cdk.Environment(
           account=os.getenv('CDK_DEFAULT_ACCOUNT'),
           region=os.getenv('CDK_DEFAULT_REGION')

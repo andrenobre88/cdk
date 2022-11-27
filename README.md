@@ -1,4 +1,4 @@
-# CDK
+# CDK - API Lambda ETL (JSON to CSV)
 
 ## Table of Contents:
 * [General Info](#general-information)
