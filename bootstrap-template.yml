@@ -1,0 +1,384 @@
+Description: This stack includes resources needed to deploy AWS CDK apps into this environment costumized by andre.nobre1988@gmail.com
+
+Parameters:
+  RepoName:
+    Default: "core-infra"
+    Type: String
+    AllowedPattern: "[A-Za-z0-9_-]{1,10}"
+    Description: An identifier to distinguish multiple bootstrap stacks in the same environment
+    ConstraintDescription: RepoName must be an alphanumeric identifier of at most 10 characters
+
+  FileAssetsBucketKmsKeyId:
+    Default: ""
+    Type: String
+    Description: DO NOT DELETE - Used by boostrap process
+
+  PublicAccessBlockConfiguration:
+    Default: "true"
+    Type: String
+    Description: DO NOT DELETE - Used by boostrap process
+
+Resources:
+#---------------------- KMS ----------------------#
+  FileAssetsBucketEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      KeyPolicy:
+        Statement:
+          - Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:GenerateDataKey
+            Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+            Resource: "*"
+          - Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:CallerAccount:
+                  !Ref AWS::AccountId
+                kms:ViaService:
+                  - !Sub s3.${AWS::Region}.amazonaws.com
+          - Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+            Effect: Allow
+            Principal:
+              AWS: !Sub ${FilePublishingRole.Arn}
+            Resource: "*"
+
+  FileAssetsBucketEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${RepoName}-cdk-assets-key
+      TargetKeyId: !Ref FileAssetsBucketEncryptionKey
+#---------------------- KMS ----------------------#
+
+#---------------------- S3 -----------------------#
+  StagingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${RepoName}-cdk-assets
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Sub ${FileAssetsBucketEncryptionKey.Arn}
+      VersioningConfiguration:
+        Status: Enabled
+
+  StagingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StagingBucket
+      PolicyDocument:
+        Id: AccessControl
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowSSLRequestsOnly
+            Action: s3:*
+            Effect: Deny
+            Resource:
+              - !Sub ${StagingBucket.Arn}
+              - !Sub ${StagingBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+            Principal: "*"
+#---------------------- S3 -----------------------#
+
+#---------------------- ECR ----------------------#
+  ContainerAssetsRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      ImageTagMutability: IMMUTABLE
+      RepositoryName: !Sub ${RepoName}-cdk-container-assets
+      RepositoryPolicyText:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: LambdaECRImageRetrievalPolicy
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - ecr:BatchGetImage
+              - ecr:GetDownloadUrlForLayer
+            Condition:
+              StringLike:
+                aws:sourceArn:
+                  !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:*
+#---------------------- ECR ----------------------#
+
+#---------------------- IAM ----------------------#
+  FilePublishingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${RepoName}-cdk-file-publishing-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+      Tags:
+        - Key: aws-cdk:bootstrap-role
+          Value: file-publishing
+
+  FilePublishingRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${RepoName}-cdk-file-publishing-role-default-policy
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:GetObject*
+              - s3:GetBucket*
+              - s3:GetEncryptionConfiguration
+              - s3:List*
+              - s3:DeleteObject*
+              - s3:PutObject*
+              - s3:Abort*
+            Resource:
+              - !Sub ${StagingBucket.Arn}
+              - !Sub ${StagingBucket.Arn}/*
+            Effect: Allow
+          - Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+            Effect: Allow
+            Resource: !Sub ${FileAssetsBucketEncryptionKey.Arn}
+        Version: "2012-10-17"
+      Roles: 
+        - !Ref FilePublishingRole
+
+  ImagePublishingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+      RoleName: !Sub ${RepoName}-cdk-image-publishing-role
+      Tags:
+        - Key: aws-cdk:bootstrap-role
+          Value: image-publishing
+
+  ImagePublishingRoleDefaultPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub ${RepoName}-cdk-image-publishing-role-default-policy
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ecr:PutImage
+              - ecr:InitiateLayerUpload
+              - ecr:UploadLayerPart
+              - ecr:CompleteLayerUpload
+              - ecr:BatchCheckLayerAvailability
+              - ecr:DescribeRepositories
+              - ecr:DescribeImages
+              - ecr:BatchGetImage
+              - ecr:GetDownloadUrlForLayer
+            Resource:
+              !Sub ${ContainerAssetsRepository.Arn}
+            Effect: Allow
+          - Action:
+              - ecr:GetAuthorizationToken
+            Resource: "*"
+            Effect: Allow
+        Version: "2012-10-17"
+      Roles:
+        - !Ref ImagePublishingRole
+
+  LookupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${RepoName}-cdk-lookup-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+      ManagedPolicyArns: 
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/ReadOnlyAccess
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Sid: DontReadSecrets
+                Effect: Deny
+                Action:
+                  - kms:Decrypt
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: LookupRolePolicy
+      Tags:
+        - Key: aws-cdk:bootstrap-role
+          Value: lookup
+
+  DeploymentActionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${RepoName}-cdk-deploy-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Sid: CloudFormationPermissions
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                Resource: "*"
+              - Sid: PipelineCrossAccountArtifactsBucket
+                Effect: Allow
+                Action:
+                  - s3:GetObject*
+                  - s3:GetBucket*
+                  - s3:List*
+                  - s3:Abort*
+                  - s3:DeleteObject*
+                  - s3:PutObject*
+                Resource: "*"
+                Condition:
+                  StringNotEquals:
+                    s3:ResourceAccount:
+                      !Ref AWS::AccountId
+              - Sid: PipelineCrossAccountArtifactsKey
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:Encrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey*
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub s3.${AWS::Region}.amazonaws.com
+              - Action: iam:PassRole
+                Resource: !Sub ${CloudFormationExecutionRole.Arn}
+                Effect: Allow
+              - Sid: CliPermissions
+                Action:
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:GetTemplate
+                  - cloudformation:DeleteStack
+                  - cloudformation:UpdateTerminationProtection
+                  - sts:GetCallerIdentity
+                  - cloudformation:GetTemplateSummary
+                Resource: "*"
+                Effect: Allow
+              - Sid: CliStagingBucket
+                Effect: Allow
+                Action:
+                  - s3:GetObject*
+                  - s3:GetBucket*
+                  - s3:List*
+                Resource:
+                  - !Sub ${StagingBucket.Arn}
+                  - !Sub ${StagingBucket.Arn}/*
+              - Sid: ReadVersion
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${CdkBootstrapVersion}
+            Version: "2012-10-17"
+          PolicyName: default
+      Tags:
+        - Key: aws-cdk:bootstrap-role
+          Value: deploy
+
+  CloudFormationExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${RepoName}-cdk-cfn-exec-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+#---------------------- IAM ----------------------#
+
+#---------------------- SSM ----------------------#
+  CdkBootstrapVersion:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Description: The version of the bootstrap resources that are currently mastered in this stack
+      Name: !Sub /${RepoName}/cdk-bootstrap/version
+      Type: String
+      Value: "14"
+
+  StagingBucketSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: !Sub /${RepoName}/cdk-bootstrap/bucket-name
+      Value: !Ref StagingBucket
+      Description: The name of the S3 bucket owned by the CDK toolkit stack
+
+  StagingBucketDomainNameSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: !Sub /${RepoName}/cdk-bootstrap/bucket-domain
+      Value: !Sub ${StagingBucket.RegionalDomainName}
+      Description: The domain name of the S3 bucket owned by the CDK toolkit stack
+
+  FileAssetKeyArnSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: !Sub /${RepoName}/cdk-bootstrap/kms-key-arn
+      Value: !Sub ${FileAssetsBucketEncryptionKey.Arn}
+      Description: The ARN of the KMS key used to encrypt the asset bucket
+
+  ImageRepositoryNameSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Type: String
+      Name: !Sub /${RepoName}/cdk-bootstrap/ecr
+      Value: !Ref ContainerAssetsRepository
+      Description: The name of the ECR repository which hosts docker image assets
+#---------------------- SSM ----------------------#
