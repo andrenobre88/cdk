@@ -2,7 +2,7 @@
 packages/
 .venv/
 .vscode/
-dev.sh
+*.sh
 
 ### AWS ###
 **/cdk.out/
