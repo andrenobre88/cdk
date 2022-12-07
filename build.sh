@@ -1,23 +1,33 @@
 #!/usr/bin/bash
-
 # Run using:
 # >source build.sh
 
 # General:
-export QUALIFIER="dev"
-# AWS CLI:
-export AWS_DEFAULT_ACCOUNT=$(aws sts get-caller-identity --query "Account" --output text)
-export AWS_DEFAULT_REGION="eu-west-2"
-# AWS Stack variables:
-export REPO_NAME="api-convert-json-2-csv"
-export GIT_COMMIT_ID="manual"
-export ARTIFACT_BUCKET="lambda-${QUALIFIER}-artifacts-${AWS_DEFAULT_ACCOUNT}-${AWS_DEFAULT_REGION}"
-export LAMBDA_PACKAGE="lambda_a.zip"
+export QUALIFIER="dev" \
+	AWS_DEFAULT_ACCOUNT=$(aws sts get-caller-identity --query "Account" --output text) \
+	AWS_DEFAULT_REGION="eu-west-2"
+
+# CDK infra
+export REPO_NAME="api-convert-json-2-csv" \
+	GIT_COMMIT_ID="manual" \
+	ARTIFACT_BUCKET="lambda-${QUALIFIER}-artifacts-${AWS_DEFAULT_ACCOUNT}-${AWS_DEFAULT_REGION}" \
+	LAMBDA_LAYER="lambda_layer.zip" \
+	LAMBDA_PACKAGE="lambda_a.zip"
+
+# Package and Upload
+package_upload () {
+	[ ! -d "tmp" ] && mkdir tmp
+	[[ ! -z "$3" ]] && pip3 install -r $3 -t ./tmp || cp -R $1/ tmp/
+	cd tmp && ls -lha 
+	zip -qr $2 . && aws s3 cp $2 s3://${ARTIFACT_BUCKET}/${REPO_NAME}/$2
+	cd .. && rm -rf tmp
+}
 
 # Creating Lambda artifact package
-cd lambda_a
-zip -qr lambda_a . && aws s3 cp ${LAMBDA_PACKAGE} s3://${ARTIFACT_BUCKET}/${REPO_NAME}/${LAMBDA_PACKAGE} && rm -rf ${LAMBDA_PACKAGE}
-cd ..
+package_upload lambda_layer ${LAMBDA_LAYER} requirements-layer.txt
+
+# Creating Lambda artifact package
+package_upload lambda_a ${LAMBDA_PACKAGE}
 
 # Bootstrap process:
 cdk bootstrap \
@@ -30,7 +40,3 @@ cdk bootstrap \
 cdk deploy \
 	--app "python3 cdk.py" \
 	--profile deployment
-
-
-
-

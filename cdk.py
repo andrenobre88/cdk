@@ -1,5 +1,4 @@
 # !/usr/bin/env python3
-
 import os
 import aws_cdk as cdk
 
@@ -19,6 +18,7 @@ AppStack(app,
          ),
          repo=os.getenv('REPO_NAME'),
          artifact_bucket=os.getenv('ARTIFACT_BUCKET'),
+         lambda_layer=os.getenv('LAMBDA_LAYER'),
          lambda_package=os.getenv('LAMBDA_PACKAGE')
          )
 

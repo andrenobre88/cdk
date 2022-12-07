@@ -2,6 +2,7 @@
 from aws_cdk import (
     Duration,
     Stack,
+    RemovalPolicy,
     CfnOutput,
     aws_lambda as lambda_,
     aws_iam as iam_,
@@ -17,6 +18,7 @@ class AppStack(Stack):
                  construct_id: str,
                  repo: str,
                  artifact_bucket: str,
+                 lambda_layer: str,
                  lambda_package: str,
                  **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -36,6 +38,26 @@ class AppStack(Stack):
             bucket_name=artifact_bucket
         )
 
+        # Lambda Layer
+        layer = lambda_.LayerVersion(
+            scope=self, 
+            id='lambda-layer',
+            code=lambda_.S3Code(
+                bucket=artifact_s3,
+                key=f"{repo}/{lambda_layer}"),
+            description='json to csv libs',
+            layer_version_name=f"{repo}-layer",
+            compatible_runtimes=[
+                lambda_.Runtime.PYTHON_3_8,
+                lambda_.Runtime.PYTHON_3_9
+            ],
+            compatible_architectures=[
+                lambda_.Architecture.X86_64,
+                lambda_.Architecture.ARM_64
+            ],
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
         # Lambda Function
         lambda_a = lambda_.Function(
             scope=self,
@@ -43,6 +65,7 @@ class AppStack(Stack):
             code=lambda_.S3Code(
                 bucket=artifact_s3,
                 key=f"{repo}/{lambda_package}"),
+            layers=[layer],
             handler="app.lambda_handler",
             runtime=lambda_.Runtime.PYTHON_3_9,
             function_name=f"{repo}-etl",
@@ -51,5 +74,8 @@ class AppStack(Stack):
         )
 
         # CDK outputs
-        CfnOutput(scope=self, id='lambda-a-name',
-                  value=lambda_a.function_name)
+        CfnOutput(scope=self, id='lambda-layer-arn',
+                  value=layer.layer_version_arn)
+        
+        CfnOutput(scope=self, id='lambda-a-arn',
+                  value=lambda_a.function_arn)
