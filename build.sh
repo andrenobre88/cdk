@@ -11,8 +11,8 @@ export QUALIFIER="dev" \
 export REPO_NAME="api-convert-json-2-csv" \
 	GIT_COMMIT_ID="manual" \
 	ARTIFACT_BUCKET="deployment-${QUALIFIER}-artifacts-${AWS_DEFAULT_ACCOUNT}-${AWS_DEFAULT_REGION}" \
-	LAMBDA_LAYER="lambda_layer.zip" \
-	LAMBDA_PACKAGE="lambda_a.zip"
+	LAMBDA_LAYER="${GIT_COMMIT_ID}/lambda_layer.zip" \
+	LAMBDA_PACKAGE="${GIT_COMMIT_ID}/lambda_a.zip"
 
 # Package and Upload
 package_upload () {
@@ -23,11 +23,11 @@ package_upload () {
 	cd .. && rm -rf tmp
 }
 
-## Creating Lambda artifact package
-#package_upload lambda_layer "${LAMBDA_LAYER}" requirements-layer.txt
-#
-## Creating Lambda artifact package
-#package_upload lambda_a "${LAMBDA_PACKAGE}"
+# Creating Lambda artifact package
+package_upload lambda_layer "${LAMBDA_LAYER}" requirements-layer.txt
+
+# Creating Lambda artifact package
+package_upload lambda_a "${LAMBDA_PACKAGE}"
 
 # Bootstrap process:
 cdk bootstrap \

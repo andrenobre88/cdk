@@ -24,14 +24,14 @@ env_cdk = aws_cdk.Environment(
     region=env_stack['region']
 )
 
-PipelineStack(app,
-              f"{env_stack['repo']}-pipeline-{env_stack['environment']}",
-              env=env_cdk,
-              synthesizer=DefaultStackSynthesizer(
-                qualifier=env_stack['environment']
-              ),
-              repo=env_stack['repo']
-              )
+# PipelineStack(app,
+#               f"{env_stack['repo']}-pipeline-{env_stack['environment']}",
+#               env=env_cdk,
+#               synthesizer=DefaultStackSynthesizer(
+#                 qualifier=env_stack['environment']
+#               ),
+#               repo=env_stack['repo']
+#               )
 
 AppStack(app,
          f"{env_stack['repo']}-app-{env_stack['environment']}",
