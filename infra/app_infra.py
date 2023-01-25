@@ -1,4 +1,3 @@
-# !/usr/bin/env python3
 from aws_cdk import (
     Duration,
     Stack,
@@ -24,14 +23,16 @@ class AppStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # IAM Role
-        lambda_role = iam_.Role(scope=self,
-                                id='lambda-role',
-                                assumed_by=iam_.ServicePrincipal('lambda.amazonaws.com'),
-                                role_name=f"{repo}-lambda-role",
-                                managed_policies=[
-                                    iam_.ManagedPolicy.from_aws_managed_policy_name(
-                                        'service-role/AWSLambdaBasicExecutionRole')
-                                ])
+        lambda_role = iam_.Role(
+            scope=self, id='lambda-role',
+            assumed_by=iam_.ServicePrincipal('lambda.amazonaws.com'),
+            role_name=f"{repo}-lambda-role",
+            managed_policies=[
+                iam_.ManagedPolicy.from_aws_managed_policy_name(
+                    'service-role/AWSLambdaBasicExecutionRole')
+            ]
+        )
+
         # Lambda code artifact bucket
         artifact_s3 = s3.Bucket.from_bucket_attributes(
             self, 'artifact-bucket',
@@ -40,8 +41,8 @@ class AppStack(Stack):
 
         # Lambda Layer
         layer = lambda_.LayerVersion(
-            scope=self, 
-            id='lambda-layer',
+            scope=self, id='lambda-layer',
+            removal_policy=RemovalPolicy.DESTROY,
             code=lambda_.S3Code(
                 bucket=artifact_s3,
                 key=f"{repo}/{lambda_layer}"),
@@ -54,14 +55,12 @@ class AppStack(Stack):
             compatible_architectures=[
                 lambda_.Architecture.X86_64,
                 lambda_.Architecture.ARM_64
-            ],
-            removal_policy=RemovalPolicy.DESTROY
+            ]
         )
 
         # Lambda Function
         lambda_a = lambda_.Function(
-            scope=self,
-            id='lambda-a',
+            scope=self, id='lambda-a',
             code=lambda_.S3Code(
                 bucket=artifact_s3,
                 key=f"{repo}/{lambda_package}"),
@@ -73,7 +72,7 @@ class AppStack(Stack):
             timeout=Duration.seconds(10)
         )
 
-        # CDK outputs
+        # Stack outputs
         CfnOutput(scope=self, id='lambda-layer-arn',
                   value=layer.layer_version_arn)
         
