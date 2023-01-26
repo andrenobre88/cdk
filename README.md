@@ -37,10 +37,10 @@ Convert small-size JSON input and return the body in CSV format.
 2.  Finally, execute the following shell script to install the required Python packages:
 
 ```
-
+source build.sh
 ```
 
-## Usage:
+## API Usage:
 
 ## Project Status:
 Project is: _in_progress_
