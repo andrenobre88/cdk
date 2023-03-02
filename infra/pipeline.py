@@ -18,7 +18,7 @@ class PipelineStack(Stack):
 
         # Source
         source = pipelines.CodePipelineSource.git_hub(
-            "andrenobre88/cdk", "master",
+            "andrenobre88/cdk", "main",
             authentication=SecretValue.secrets_manager("shared/github/token")
         )
 
@@ -32,9 +32,9 @@ class PipelineStack(Stack):
                 "Synth",
                 input=source,
                 commands=[
-                    "npm ci",
-                    "npm run build",
-                    "npx cdk synth"
+                    "npm install -g aws-cdk",
+                    "pip install -r requirements.txt",
+                    "cdk synth"
                 ],
                 primary_output_directory="cdk.out"
             )
