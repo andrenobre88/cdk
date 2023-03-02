@@ -23,6 +23,7 @@ class PipelineStack(Stack):
         )
 
         # Pipeline
+        # Construct library doc: https://docs.aws.amazon.com/cdk/api/v1/python/aws_cdk.pipelines/README.html
         pipeline = pipelines.CodePipeline(
             self,
             repo,
@@ -38,4 +39,3 @@ class PipelineStack(Stack):
                 primary_output_directory="cdk.out"
             )
         )
-
