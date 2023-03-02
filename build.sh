@@ -18,7 +18,7 @@ export REPO_NAME="api-convert-json-2-csv" \
 package_upload () {
 	[ ! -d "tmp" ] && mkdir tmp
 	[[ ! -z "$3" ]] && pip3 install -r $3 -t ./tmp || cp -R $1/ tmp/
-	cd tmp && ls -lha 
+	cd tmp && ls -lha
 	zip -qr $2 . && aws s3 cp $2 s3://"${ARTIFACT_BUCKET}"/"${REPO_NAME}"/"${GIT_COMMIT_ID}"/$2
 	cd .. && rm -rf tmp
 }
